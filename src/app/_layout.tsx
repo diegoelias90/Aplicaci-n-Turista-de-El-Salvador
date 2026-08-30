@@ -1,18 +1,32 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
-import { useColorScheme } from 'react-native';
+/**
+ * Layout raíz del módulo turístico.
+ *
+ * Deliberadamente mínimo: solo el provider del catálogo y el Stack.
+ * Cuando se integren los módulos de usuarios y gamificación, aquí es
+ * donde se agregan el portón de sesión y los demás providers.
+ */
+import { Stack } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 
-import { AnimatedSplashOverlay } from '@/components/animated-icon';
-import AppTabs from '@/components/app-tabs';
+import { DestinosProvider } from '@/context/destinos-context';
+import { Colores } from '@/constants/theme';
 
-SplashScreen.preventAutoHideAsync();
-
-export default function TabLayout() {
-  const colorScheme = useColorScheme();
+export default function RootLayout() {
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <AnimatedSplashOverlay />
-      <AppTabs />
-    </ThemeProvider>
+    <DestinosProvider>
+      <StatusBar style="dark" />
+      <Stack
+        screenOptions={{
+          headerStyle: { backgroundColor: Colores.tarjeta },
+          headerTintColor: Colores.verdeOscuro,
+          headerTitleStyle: { fontWeight: '700' },
+          contentStyle: { backgroundColor: Colores.fondo },
+        }}>
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="destino/[id]" options={{ title: 'Destino' }} />
+        <Stack.Screen name="ruta/[id]" options={{ title: 'Ruta' }} />
+        <Stack.Screen name="categoria/[id]" options={{ title: 'Categoría' }} />
+      </Stack>
+    </DestinosProvider>
   );
 }

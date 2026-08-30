@@ -1,65 +1,65 @@
 /**
- * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
- * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
+ * Tema de la app. Los colores salen del prototipo de Figma:
+ * verde salvadoreno de fondo, tarjetas blancas y dorado para los puntos.
  */
-
 import '@/global.css';
 
 import { Platform } from 'react-native';
 
-export const Colors = {
-  light: {
-    text: '#000000',
-    background: '#ffffff',
-    backgroundElement: '#F0F0F3',
-    backgroundSelected: '#E0E1E6',
-    textSecondary: '#60646C',
-  },
-  dark: {
-    text: '#ffffff',
-    background: '#000000',
-    backgroundElement: '#212225',
-    backgroundSelected: '#2E3135',
-    textSecondary: '#B0B4BA',
-  },
+export const Colores = {
+  verde: '#12784A',
+  verdeOscuro: '#0B5233',
+  verdeClaro: '#E3F1E8',
+  dorado: '#F2A93B',
+  doradoSuave: '#FDF2DE',
+  coral: '#D9455F',
+
+  texto: '#0F1A14',
+  textoSuave: '#5A6B60',
+  textoTenue: '#8B9A91',
+
+  fondo: '#F4F7F5',
+  tarjeta: '#FFFFFF',
+  borde: '#E1E9E4',
 } as const;
 
-export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
+/**
+ * Emoji y color por categoria. Va aqui y no en la base porque la tabla
+ * Categorias solo tiene nombre y descripcion: asi no hay que pedirle
+ * ningun cambio a Victoria para poder pintar el disenio.
+ * La llave es el nombre exacto que ella inserto en la tabla.
+ */
+export const EstiloCategoria: Record<string, { emoji: string; color: string }> = {
+  'Playas': { emoji: '🏖️', color: '#0E8AA8' },
+  'Volcanes': { emoji: '🌋', color: '#B4552B' },
+  'Pueblos': { emoji: '🏘️', color: '#9A7A22' },
+  'Sitios históricos': { emoji: '🏛️', color: '#6B4E9E' },
+  'Parques naturales': { emoji: '🌿', color: '#12784A' },
+  'Restaurantes': { emoji: '🍽️', color: '#C0435F' },
+};
 
-export const Fonts = Platform.select({
+export function estiloDeCategoria(nombre?: string | null) {
+  return (nombre && EstiloCategoria[nombre]) || { emoji: '📍', color: Colores.verde };
+}
+
+/** El esquema guarda baja/media/alta; el disenio muestra otra palabra. */
+export const EtiquetaDificultad: Record<string, { texto: string; color: string }> = {
+  baja: { texto: 'Fácil', color: '#12784A' },
+  media: { texto: 'Media', color: '#C08A1E' },
+  alta: { texto: 'Difícil', color: '#C0435F' },
+};
+
+export const Espacio = { xs: 4, sm: 8, md: 16, lg: 24, xl: 32 } as const;
+export const Radio = { sm: 8, md: 12, lg: 16, xl: 20, pastilla: 999 } as const;
+
+export const Sombra = Platform.select({
   ios: {
-    /** iOS `UIFontDescriptorSystemDesignDefault` */
-    sans: 'system-ui',
-    /** iOS `UIFontDescriptorSystemDesignSerif` */
-    serif: 'ui-serif',
-    /** iOS `UIFontDescriptorSystemDesignRounded` */
-    rounded: 'ui-rounded',
-    /** iOS `UIFontDescriptorSystemDesignMonospaced` */
-    mono: 'ui-monospace',
+    shadowColor: '#0F1A14',
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 3 },
   },
-  default: {
-    sans: 'normal',
-    serif: 'serif',
-    rounded: 'normal',
-    mono: 'monospace',
-  },
-  web: {
-    sans: 'var(--font-display)',
-    serif: 'var(--font-serif)',
-    rounded: 'var(--font-rounded)',
-    mono: 'var(--font-mono)',
-  },
+  default: { elevation: 2 },
 });
 
-export const Spacing = {
-  half: 2,
-  one: 4,
-  two: 8,
-  three: 16,
-  four: 24,
-  five: 32,
-  six: 64,
-} as const;
-
-export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
-export const MaxContentWidth = 800;
+export const AltoBarraTabs = Platform.select({ ios: 50, android: 70 }) ?? 60;
