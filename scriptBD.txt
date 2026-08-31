@@ -1,0 +1,647 @@
+-- =====================================================================
+-- Base de datos: App de Turismo y Rutas Turisticas de El Salvador
+-- Version PostgreSQL (Supabase) - script completo desde cero
+-- Incluye: esquema, indices, triggers, datos iniciales, GRANT y RLS
+-- =====================================================================
+
+-- =====================================================================
+-- MODULO: USUARIOS Y PROGRESO
+-- =====================================================================
+
+CREATE TABLE Niveles (
+    id_nivel            SERIAL PRIMARY KEY,
+    nombre              VARCHAR(50)  NOT NULL,
+    puntos_requeridos   INT          NOT NULL,
+    orden               INT          NOT NULL UNIQUE
+);
+
+CREATE TABLE Usuarios (
+    id_usuario           SERIAL PRIMARY KEY,
+    auth_id               UUID UNIQUE REFERENCES auth.users(id) ON DELETE CASCADE,
+    nombre                VARCHAR(100)  NOT NULL,
+    correo                VARCHAR(150)  NOT NULL UNIQUE,
+    puntos_totales        INT           NOT NULL DEFAULT 0,
+    fecha_registro        TIMESTAMPTZ   NOT NULL DEFAULT now(),
+    fecha_actualizacion   TIMESTAMPTZ   NOT NULL DEFAULT now(),
+    id_nivel              INT           NOT NULL DEFAULT 1,
+    CONSTRAINT fk_usuario_nivel
+        FOREIGN KEY (id_nivel) REFERENCES Niveles(id_nivel)
+        ON UPDATE CASCADE ON DELETE RESTRICT,
+    CONSTRAINT usuarios_nombre_no_vacio
+        CHECK (length(trim(nombre)) > 0)
+);
+-- La contrasena no se guarda aqui: Supabase Auth (auth.users) ya la
+-- maneja de forma segura. auth_id conecta cada usuario con su cuenta.
+
+-- =====================================================================
+-- MODULO: DESTINOS TURISTICOS
+-- =====================================================================
+
+CREATE TABLE Departamentos (
+    id_departamento  SERIAL PRIMARY KEY,
+    nombre           VARCHAR(50) NOT NULL UNIQUE,
+    CONSTRAINT departamentos_nombre_no_vacio
+        CHECK (length(trim(nombre)) > 0)
+);
+
+CREATE TABLE Categorias (
+    id_categoria          SERIAL PRIMARY KEY,
+    nombre                VARCHAR(50)  NOT NULL,
+    descripcion           VARCHAR(255),
+    fecha_actualizacion   TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    CONSTRAINT categorias_nombre_no_vacio
+        CHECK (length(trim(nombre)) > 0)
+);
+
+CREATE TABLE Destinos (
+    id_destino            SERIAL PRIMARY KEY,
+    nombre                VARCHAR(150)     NOT NULL,
+    descripcion           TEXT,
+    latitud               DECIMAL(10,8),
+    longitud              DECIMAL(11,8),
+    direccion             VARCHAR(255),
+    imagen_portada        VARCHAR(500),
+    id_departamento       INT              NOT NULL,
+    id_categoria          INT              NOT NULL,
+    fecha_actualizacion   TIMESTAMPTZ      NOT NULL DEFAULT now(),
+    CONSTRAINT fk_destino_departamento
+        FOREIGN KEY (id_departamento) REFERENCES Departamentos(id_departamento)
+        ON UPDATE CASCADE ON DELETE RESTRICT,
+    CONSTRAINT fk_destino_categoria
+        FOREIGN KEY (id_categoria) REFERENCES Categorias(id_categoria)
+        ON UPDATE CASCADE ON DELETE RESTRICT,
+    CONSTRAINT destinos_nombre_no_vacio
+        CHECK (length(trim(nombre)) > 0)
+);
+-- imagen_portada es un acceso rapido a "la" foto principal del destino,
+-- para listas/miniaturas sin tener que consultar Multimedia. Se llena
+-- sola con un trigger cuando se sube la primera foto (ver mas abajo).
+
+CREATE TABLE Multimedia (
+    id_multimedia  SERIAL PRIMARY KEY,
+    tipo           VARCHAR(10)  NOT NULL CHECK (tipo IN ('foto','video')),
+    url            VARCHAR(500) NOT NULL,
+    id_destino     INT          NOT NULL,
+    CONSTRAINT fk_multimedia_destino
+        FOREIGN KEY (id_destino) REFERENCES Destinos(id_destino)
+        ON UPDATE CASCADE ON DELETE CASCADE
+);
+
+CREATE TABLE Rutas (
+    id_ruta               SERIAL PRIMARY KEY,
+    nombre                VARCHAR(150) NOT NULL,
+    descripcion           TEXT,
+    dificultad            VARCHAR(10)  NOT NULL DEFAULT 'media'
+                           CHECK (dificultad IN ('baja','media','alta')),
+    fecha_actualizacion   TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    CONSTRAINT rutas_nombre_no_vacio
+        CHECK (length(trim(nombre)) > 0)
+);
+
+CREATE TABLE Ruta_Destino (
+    id_ruta     INT NOT NULL,
+    id_destino  INT NOT NULL,
+    orden       INT NOT NULL,
+    PRIMARY KEY (id_ruta, id_destino),
+    CONSTRAINT fk_rd_ruta
+        FOREIGN KEY (id_ruta) REFERENCES Rutas(id_ruta)
+        ON UPDATE CASCADE ON DELETE CASCADE,
+    CONSTRAINT fk_rd_destino
+        FOREIGN KEY (id_destino) REFERENCES Destinos(id_destino)
+        ON UPDATE CASCADE ON DELETE CASCADE
+);
+
+CREATE TABLE Favoritos (
+    id_usuario      INT       NOT NULL,
+    id_destino      INT       NOT NULL,
+    fecha_agregado  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (id_usuario, id_destino),
+    CONSTRAINT fk_favorito_usuario
+        FOREIGN KEY (id_usuario) REFERENCES Usuarios(id_usuario)
+        ON UPDATE CASCADE ON DELETE CASCADE,
+    CONSTRAINT fk_favorito_destino
+        FOREIGN KEY (id_destino) REFERENCES Destinos(id_destino)
+        ON UPDATE CASCADE ON DELETE CASCADE
+);
+
+CREATE TABLE Calificaciones (
+    id_calificacion       SERIAL PRIMARY KEY,
+    id_usuario            INT NOT NULL,
+    id_destino            INT NOT NULL,
+    puntuacion            SMALLINT NOT NULL,
+    comentario            TEXT,
+    fecha_calificacion    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    fecha_actualizacion   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT fk_calificacion_usuario
+        FOREIGN KEY (id_usuario) REFERENCES Usuarios(id_usuario)
+        ON DELETE CASCADE,
+    CONSTRAINT fk_calificacion_destino
+        FOREIGN KEY (id_destino) REFERENCES Destinos(id_destino)
+        ON DELETE CASCADE,
+    CONSTRAINT calificaciones_puntuacion_valida
+        CHECK (puntuacion BETWEEN 1 AND 5),
+    -- un usuario solo puede calificar una vez cada destino
+    UNIQUE (id_usuario, id_destino)
+);
+
+CREATE TABLE Visitas (
+    id_visita      SERIAL PRIMARY KEY,
+    id_usuario     INT NOT NULL,
+    id_destino     INT NOT NULL,
+    fecha_visita   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    latitud        DECIMAL(10,8),
+    longitud       DECIMAL(11,8),
+    CONSTRAINT fk_visita_usuario
+        FOREIGN KEY (id_usuario) REFERENCES Usuarios(id_usuario)
+        ON DELETE CASCADE,
+    CONSTRAINT fk_visita_destino
+        FOREIGN KEY (id_destino) REFERENCES Destinos(id_destino)
+        ON DELETE CASCADE,
+    -- un destino solo cuenta como "visitado" una vez por usuario
+    UNIQUE (id_usuario, id_destino)
+);
+
+-- =====================================================================
+-- MODULO: GAMIFICACION
+-- =====================================================================
+
+CREATE TABLE Misiones (
+    id_mision              SERIAL PRIMARY KEY,
+    titulo                 VARCHAR(150) NOT NULL,
+    descripcion            TEXT,
+    puntos_otorgados       INT          NOT NULL,
+    id_destino             INT          NULL,
+    fecha_actualizacion    TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    CONSTRAINT fk_mision_destino
+        FOREIGN KEY (id_destino) REFERENCES Destinos(id_destino)
+        ON UPDATE CASCADE ON DELETE SET NULL,
+    CONSTRAINT misiones_titulo_no_vacio
+        CHECK (length(trim(titulo)) > 0)
+);
+
+CREATE TABLE Usuario_Mision (
+    id_usuario        INT NOT NULL,
+    id_mision         INT NOT NULL,
+    estado            VARCHAR(12) NOT NULL DEFAULT 'pendiente'
+                       CHECK (estado IN ('pendiente','completada')),
+    fecha_completada  TIMESTAMPTZ NULL,
+    PRIMARY KEY (id_usuario, id_mision),
+    CONSTRAINT fk_um_usuario
+        FOREIGN KEY (id_usuario) REFERENCES Usuarios(id_usuario)
+        ON UPDATE CASCADE ON DELETE CASCADE,
+    CONSTRAINT fk_um_mision
+        FOREIGN KEY (id_mision) REFERENCES Misiones(id_mision)
+        ON UPDATE CASCADE ON DELETE CASCADE
+);
+
+CREATE TABLE Evidencias (
+    id_evidencia  SERIAL PRIMARY KEY,
+    url_foto      VARCHAR(500) NOT NULL,
+    fecha         TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    id_usuario    INT          NOT NULL,
+    id_mision     INT          NOT NULL,
+    CONSTRAINT fk_evidencia_usuario
+        FOREIGN KEY (id_usuario) REFERENCES Usuarios(id_usuario)
+        ON UPDATE CASCADE ON DELETE CASCADE,
+    CONSTRAINT fk_evidencia_mision
+        FOREIGN KEY (id_mision) REFERENCES Misiones(id_mision)
+        ON UPDATE CASCADE ON DELETE CASCADE
+);
+-- Evidencias no tiene fecha_actualizacion ni permite UPDATE/DELETE desde
+-- la app (ver politicas RLS mas abajo): una vez subida la prueba de que
+-- se completo la mision, debe mantenerse integra.
+
+CREATE TABLE Insignias (
+    id_insignia            SERIAL PRIMARY KEY,
+    nombre                 VARCHAR(100) NOT NULL,
+    descripcion            TEXT,
+    condicion              VARCHAR(255),
+    fecha_actualizacion    TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    CONSTRAINT insignias_nombre_no_vacio
+        CHECK (length(trim(nombre)) > 0)
+);
+
+CREATE TABLE Usuario_Insignia (
+    id_usuario       INT NOT NULL,
+    id_insignia      INT NOT NULL,
+    fecha_obtenida   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (id_usuario, id_insignia),
+    CONSTRAINT fk_ui_usuario
+        FOREIGN KEY (id_usuario) REFERENCES Usuarios(id_usuario)
+        ON UPDATE CASCADE ON DELETE CASCADE,
+    CONSTRAINT fk_ui_insignia
+        FOREIGN KEY (id_insignia) REFERENCES Insignias(id_insignia)
+        ON UPDATE CASCADE ON DELETE CASCADE
+);
+
+-- =====================================================================
+-- INDICES ADICIONALES
+-- =====================================================================
+
+CREATE INDEX idx_destino_departamento   ON Destinos(id_departamento);
+CREATE INDEX idx_destino_categoria      ON Destinos(id_categoria);
+CREATE INDEX idx_usuario_puntos         ON Usuarios(puntos_totales DESC);
+CREATE INDEX idx_mision_destino         ON Misiones(id_destino);
+CREATE INDEX idx_evidencia_usuario      ON Evidencias(id_usuario);
+CREATE INDEX indice_calificaciones_destino ON Calificaciones(id_destino);
+CREATE INDEX idx_visitas_usuario ON Visitas(id_usuario);
+
+-- =====================================================================
+-- TRIGGERS: fecha_actualizacion automatica
+-- =====================================================================
+
+CREATE OR REPLACE FUNCTION actualizar_fecha_modificacion()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.fecha_actualizacion = now();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER usuarios_fecha_actualizacion
+    BEFORE UPDATE ON Usuarios
+    FOR EACH ROW EXECUTE FUNCTION actualizar_fecha_modificacion();
+
+CREATE TRIGGER destinos_fecha_actualizacion
+    BEFORE UPDATE ON Destinos
+    FOR EACH ROW EXECUTE FUNCTION actualizar_fecha_modificacion();
+
+CREATE TRIGGER rutas_fecha_actualizacion
+    BEFORE UPDATE ON Rutas
+    FOR EACH ROW EXECUTE FUNCTION actualizar_fecha_modificacion();
+
+CREATE TRIGGER misiones_fecha_actualizacion
+    BEFORE UPDATE ON Misiones
+    FOR EACH ROW EXECUTE FUNCTION actualizar_fecha_modificacion();
+
+CREATE TRIGGER insignias_fecha_actualizacion
+    BEFORE UPDATE ON Insignias
+    FOR EACH ROW EXECUTE FUNCTION actualizar_fecha_modificacion();
+
+CREATE TRIGGER categorias_fecha_actualizacion
+    BEFORE UPDATE ON Categorias
+    FOR EACH ROW EXECUTE FUNCTION actualizar_fecha_modificacion();
+
+CREATE TRIGGER calificaciones_fecha_actualizacion
+    BEFORE UPDATE ON Calificaciones
+    FOR EACH ROW EXECUTE FUNCTION actualizar_fecha_modificacion();
+
+-- =====================================================================
+-- TRIGGERS: progreso automatico (puntos y nivel)
+-- =====================================================================
+
+-- Cuando una mision pasa a 'completada', se suman sus puntos al usuario
+CREATE OR REPLACE FUNCTION fn_mision_completada()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_puntos INT;
+BEGIN
+    IF NEW.estado = 'completada' AND OLD.estado <> 'completada' THEN
+        SELECT puntos_otorgados INTO v_puntos
+        FROM Misiones
+        WHERE id_mision = NEW.id_mision;
+
+        UPDATE Usuarios
+        SET puntos_totales = puntos_totales + v_puntos
+        WHERE id_usuario = NEW.id_usuario;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_mision_completada
+    AFTER UPDATE ON Usuario_Mision
+    FOR EACH ROW EXECUTE FUNCTION fn_mision_completada();
+
+-- Cuando cambian los puntos del usuario, se revisa si le toca subir de nivel
+CREATE OR REPLACE FUNCTION fn_subir_nivel()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_nuevo_nivel INT;
+BEGIN
+    IF NEW.puntos_totales <> OLD.puntos_totales THEN
+        SELECT id_nivel INTO v_nuevo_nivel
+        FROM Niveles
+        WHERE puntos_requeridos <= NEW.puntos_totales
+        ORDER BY puntos_requeridos DESC
+        LIMIT 1;
+
+        IF v_nuevo_nivel IS NOT NULL AND v_nuevo_nivel <> NEW.id_nivel THEN
+            UPDATE Usuarios
+            SET id_nivel = v_nuevo_nivel
+            WHERE id_usuario = NEW.id_usuario;
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_subir_nivel
+    AFTER UPDATE ON Usuarios
+    FOR EACH ROW EXECUTE FUNCTION fn_subir_nivel();
+
+-- =====================================================================
+-- TRIGGERS: imagen de portada automatica
+-- =====================================================================
+
+-- Cuando se sube la primera foto de un destino, se usa como su portada
+CREATE OR REPLACE FUNCTION fn_asignar_imagen_portada()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.tipo = 'foto' THEN
+        UPDATE Destinos
+        SET imagen_portada = NEW.url
+        WHERE id_destino = NEW.id_destino
+          AND imagen_portada IS NULL;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_asignar_imagen_portada
+    AFTER INSERT ON Multimedia
+    FOR EACH ROW EXECUTE FUNCTION fn_asignar_imagen_portada();
+
+-- =====================================================================
+-- TRIGGER: registro automatico de destinos visitados
+-- =====================================================================
+-- La evidencia es la prueba real de que el usuario estuvo en el lugar,
+-- asi que de ahi se dispara automaticamente el registro de visita.
+
+CREATE OR REPLACE FUNCTION fn_marcar_visita()
+RETURNS TRIGGER
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_destino INT;
+BEGIN
+    SELECT id_destino INTO v_destino
+    FROM Misiones
+    WHERE id_mision = NEW.id_mision;
+
+    IF v_destino IS NOT NULL THEN
+        INSERT INTO Visitas (id_usuario, id_destino)
+        VALUES (NEW.id_usuario, v_destino)
+        ON CONFLICT (id_usuario, id_destino) DO NOTHING;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_marcar_visita
+    AFTER INSERT ON Evidencias
+    FOR EACH ROW EXECUTE FUNCTION fn_marcar_visita();
+
+-- SECURITY DEFINER porque este trigger inserta en una tabla distinta
+-- (Visitas) a la que el usuario esta escribiendo (Evidencias); asi
+-- puede completar el INSERT sin que el usuario necesite permiso
+-- directo de escritura en Visitas.
+
+-- =====================================================================
+-- DATOS INICIALES
+-- =====================================================================
+
+INSERT INTO Niveles (nombre, puntos_requeridos, orden) VALUES
+    ('Explorador Novato',    0,    1),
+    ('Explorador',           200,  2),
+    ('Aventurero',           500,  3),
+    ('Trotamundos',          1000, 4),
+    ('Leyenda Salvadoreña',  2000, 5);
+
+INSERT INTO Categorias (nombre, descripcion) VALUES
+    ('Playas',            'Costas y balnearios del país'),
+    ('Volcanes',          'Zonas volcánicas y miradores'),
+    ('Pueblos',           'Pueblos y centros históricos'),
+    ('Sitios históricos', 'Ruinas y lugares patrimoniales'),
+    ('Parques naturales', 'Áreas naturales y reservas'),
+    ('Restaurantes',      'Gastronomía local');
+
+INSERT INTO Departamentos (nombre) VALUES
+    ('Ahuachapán'), ('Santa Ana'), ('Sonsonate'), ('Chalatenango'),
+    ('La Libertad'), ('San Salvador'), ('Cuscatlán'), ('La Paz'),
+    ('Cabañas'), ('San Vicente'), ('Usulután'), ('San Miguel'),
+    ('Morazán'), ('La Unión');
+
+-- =====================================================================
+-- GRANT + ROW LEVEL SECURITY
+-- =====================================================================
+
+-- ---------------------------------------------------------------------
+-- Usuarios
+-- ---------------------------------------------------------------------
+
+ALTER TABLE Usuarios ENABLE ROW LEVEL SECURITY;
+
+GRANT SELECT, INSERT, UPDATE ON Usuarios TO authenticated;
+
+CREATE POLICY usuarios_select_own
+    ON Usuarios FOR SELECT
+    TO authenticated
+    USING (auth_id = auth.uid());
+
+CREATE POLICY usuarios_insert_own
+    ON Usuarios FOR INSERT
+    TO authenticated
+    WITH CHECK (auth_id = auth.uid());
+
+CREATE POLICY usuarios_update_own
+    ON Usuarios FOR UPDATE
+    TO authenticated
+    USING (auth_id = auth.uid())
+    WITH CHECK (auth_id = auth.uid());
+
+-- ---------------------------------------------------------------------
+-- Usuario_Mision
+-- ---------------------------------------------------------------------
+
+ALTER TABLE Usuario_Mision ENABLE ROW LEVEL SECURITY;
+
+GRANT SELECT, INSERT, UPDATE ON Usuario_Mision TO authenticated;
+
+CREATE POLICY um_select_own
+    ON Usuario_Mision FOR SELECT
+    TO authenticated
+    USING (
+        EXISTS (
+            SELECT 1 FROM Usuarios
+            WHERE Usuarios.id_usuario = Usuario_Mision.id_usuario
+              AND Usuarios.auth_id = auth.uid()
+        )
+    );
+
+CREATE POLICY um_insert_own
+    ON Usuario_Mision FOR INSERT
+    TO authenticated
+    WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM Usuarios
+            WHERE Usuarios.id_usuario = Usuario_Mision.id_usuario
+              AND Usuarios.auth_id = auth.uid()
+        )
+    );
+
+CREATE POLICY um_update_own
+    ON Usuario_Mision FOR UPDATE
+    TO authenticated
+    USING (
+        EXISTS (
+            SELECT 1 FROM Usuarios
+            WHERE Usuarios.id_usuario = Usuario_Mision.id_usuario
+              AND Usuarios.auth_id = auth.uid()
+        )
+    )
+    WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM Usuarios
+            WHERE Usuarios.id_usuario = Usuario_Mision.id_usuario
+              AND Usuarios.auth_id = auth.uid()
+        )
+    );
+
+-- ---------------------------------------------------------------------
+-- Evidencias
+-- ---------------------------------------------------------------------
+
+ALTER TABLE Evidencias ENABLE ROW LEVEL SECURITY;
+
+GRANT SELECT, INSERT ON Evidencias TO authenticated;
+
+CREATE POLICY evidencias_select_own
+    ON Evidencias FOR SELECT
+    TO authenticated
+    USING (
+        EXISTS (
+            SELECT 1 FROM Usuarios
+            WHERE Usuarios.id_usuario = Evidencias.id_usuario
+              AND Usuarios.auth_id = auth.uid()
+        )
+    );
+
+CREATE POLICY evidencias_insert_own
+    ON Evidencias FOR INSERT
+    TO authenticated
+    WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM Usuarios
+            WHERE Usuarios.id_usuario = Evidencias.id_usuario
+              AND Usuarios.auth_id = auth.uid()
+        )
+    );
+
+-- ---------------------------------------------------------------------
+-- Usuario_Insignia
+-- ---------------------------------------------------------------------
+
+ALTER TABLE Usuario_Insignia ENABLE ROW LEVEL SECURITY;
+
+GRANT SELECT ON Usuario_Insignia TO authenticated;
+
+CREATE POLICY ui_select_own
+    ON Usuario_Insignia FOR SELECT
+    TO authenticated
+    USING (
+        EXISTS (
+            SELECT 1 FROM Usuarios
+            WHERE Usuarios.id_usuario = Usuario_Insignia.id_usuario
+              AND Usuarios.auth_id = auth.uid()
+        )
+    );
+-- No se da INSERT: las insignias las otorga la logica del sistema, no
+-- el usuario directamente, para evitar que alguien se las asigne solo.
+
+-- ---------------------------------------------------------------------
+-- Calificaciones
+-- ---------------------------------------------------------------------
+
+ALTER TABLE Calificaciones ENABLE ROW LEVEL SECURITY;
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON Calificaciones TO authenticated;
+
+-- cualquier usuario autenticado puede ver todas las calificaciones
+-- (son publicas, sirven para mostrar el promedio de cada destino)
+CREATE POLICY "Cualquiera puede ver las calificaciones"
+    ON Calificaciones FOR SELECT
+    TO authenticated
+    USING (true);
+
+CREATE POLICY "Usuarios pueden calificar destinos"
+    ON Calificaciones FOR INSERT
+    TO authenticated
+    WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM Usuarios
+            WHERE Usuarios.id_usuario = Calificaciones.id_usuario
+              AND Usuarios.auth_id = auth.uid()
+        )
+    );
+
+CREATE POLICY "Usuarios pueden editar su propia calificacion"
+    ON Calificaciones FOR UPDATE
+    TO authenticated
+    USING (
+        EXISTS (
+            SELECT 1 FROM Usuarios
+            WHERE Usuarios.id_usuario = Calificaciones.id_usuario
+              AND Usuarios.auth_id = auth.uid()
+        )
+    )
+    WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM Usuarios
+            WHERE Usuarios.id_usuario = Calificaciones.id_usuario
+              AND Usuarios.auth_id = auth.uid()
+        )
+    );
+
+CREATE POLICY "Usuarios pueden borrar su propia calificacion"
+    ON Calificaciones FOR DELETE
+    TO authenticated
+    USING (
+        EXISTS (
+            SELECT 1 FROM Usuarios
+            WHERE Usuarios.id_usuario = Calificaciones.id_usuario
+              AND Usuarios.auth_id = auth.uid()
+        )
+    );
+
+-- ---------------------------------------------------------------------
+-- Visitas
+-- ---------------------------------------------------------------------
+
+ALTER TABLE Visitas ENABLE ROW LEVEL SECURITY;
+
+GRANT SELECT ON Visitas TO authenticated;
+
+CREATE POLICY visitas_select_own
+    ON Visitas FOR SELECT
+    TO authenticated
+    USING (
+        EXISTS (
+            SELECT 1 FROM Usuarios
+            WHERE Usuarios.id_usuario = Visitas.id_usuario
+              AND Usuarios.auth_id = auth.uid()
+        )
+    );
+-- No se da INSERT/UPDATE/DELETE: las visitas las crea unicamente el
+-- trigger trg_marcar_visita, para que nadie pueda marcar un destino
+-- como visitado sin haber subido evidencia real.
+
+-- =====================================================================
+-- CONSULTAS DE EJEMPLO
+-- =====================================================================
+-- Ranking de usuarios por puntos:
+-- SELECT id_usuario, nombre, puntos_totales,
+--        RANK() OVER (ORDER BY puntos_totales DESC) AS posicion
+-- FROM Usuarios;
+
+-- Promedio de calificacion por destino:
+-- SELECT id_destino, ROUND(AVG(puntuacion), 1) AS promedio, COUNT(*) AS total
+-- FROM Calificaciones
+-- GROUP BY id_destino;
+
+-- Cantidad de destinos visitados por usuario:
+-- SELECT id_usuario, COUNT(*) AS destinos_visitados
+-- FROM Visitas
+-- GROUP BY id_usuario;
