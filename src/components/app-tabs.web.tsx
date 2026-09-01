@@ -10,6 +10,9 @@ export default function AppTabs() {
       <TabSlot style={{ height: '100%' }} />
       <TabList asChild>
         <View style={estilos.barra}>
+          <TabTrigger name="index" href="/" asChild>
+            <BotonTab>🏠 Inicio</BotonTab>
+          </TabTrigger>
           <TabTrigger name="destinos" href="/destinos" asChild>
             <BotonTab>📍 Destinos</BotonTab>
           </TabTrigger>

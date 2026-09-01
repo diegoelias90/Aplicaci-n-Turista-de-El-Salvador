@@ -14,6 +14,11 @@ export default function AppTabs() {
       backgroundColor={Colores.tarjeta}
       indicatorColor={Colores.verdeClaro}
       labelStyle={{ selected: { color: Colores.verdeOscuro } }}>
+      <NativeTabs.Trigger name="index">
+        <NativeTabs.Trigger.Label>Inicio</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf="house" md="home" />
+      </NativeTabs.Trigger>
+
       <NativeTabs.Trigger name="destinos">
         <NativeTabs.Trigger.Label>Destinos</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon

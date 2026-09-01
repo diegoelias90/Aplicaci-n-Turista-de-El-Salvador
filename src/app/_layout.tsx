@@ -26,6 +26,9 @@ export default function RootLayout() {
         <Stack.Screen name="destino/[id]" options={{ title: 'Destino' }} />
         <Stack.Screen name="ruta/[id]" options={{ title: 'Ruta' }} />
         <Stack.Screen name="categoria/[id]" options={{ title: 'Categoría' }} />
+        {/* Módulo de mapa (Niriel) */}
+        <Stack.Screen name="destinos/[id]" options={{ title: 'Destino' }} />
+        <Stack.Screen name="mapa" options={{ title: 'Mapa' }} />
       </Stack>
     </DestinosProvider>
   );
