@@ -628,6 +628,61 @@ CREATE POLICY visitas_select_own
 -- trigger trg_marcar_visita, para que nadie pueda marcar un destino
 -- como visitado sin haber subido evidencia real.
 
+-- ---------------------------------------------------------------------
+-- Contenido publico (Niveles, Departamentos, Categorias, Destinos,
+-- Multimedia, Rutas, Ruta_Destino, Misiones, Insignias)
+-- ---------------------------------------------------------------------
+-- No son privadas de ningun usuario: cualquiera con sesion iniciada
+-- puede leerlas. Por ahora solo lectura, nadie desde la app las crea
+-- o edita todavia.
+
+ALTER TABLE Niveles       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE Departamentos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE Categorias    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE Destinos      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE Multimedia    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE Rutas         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE Ruta_Destino  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE Misiones      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE Insignias     ENABLE ROW LEVEL SECURITY;
+
+GRANT SELECT ON Niveles       TO authenticated;
+GRANT SELECT ON Departamentos TO authenticated;
+GRANT SELECT ON Categorias    TO authenticated;
+GRANT SELECT ON Destinos      TO authenticated;
+GRANT SELECT ON Multimedia    TO authenticated;
+GRANT SELECT ON Rutas         TO authenticated;
+GRANT SELECT ON Ruta_Destino  TO authenticated;
+GRANT SELECT ON Misiones      TO authenticated;
+GRANT SELECT ON Insignias     TO authenticated;
+
+CREATE POLICY "Contenido publico: lectura libre"
+    ON Niveles FOR SELECT TO authenticated USING (true);
+
+CREATE POLICY "Contenido publico: lectura libre"
+    ON Departamentos FOR SELECT TO authenticated USING (true);
+
+CREATE POLICY "Contenido publico: lectura libre"
+    ON Categorias FOR SELECT TO authenticated USING (true);
+
+CREATE POLICY "Contenido publico: lectura libre"
+    ON Destinos FOR SELECT TO authenticated USING (true);
+
+CREATE POLICY "Contenido publico: lectura libre"
+    ON Multimedia FOR SELECT TO authenticated USING (true);
+
+CREATE POLICY "Contenido publico: lectura libre"
+    ON Rutas FOR SELECT TO authenticated USING (true);
+
+CREATE POLICY "Contenido publico: lectura libre"
+    ON Ruta_Destino FOR SELECT TO authenticated USING (true);
+
+CREATE POLICY "Contenido publico: lectura libre"
+    ON Misiones FOR SELECT TO authenticated USING (true);
+
+CREATE POLICY "Contenido publico: lectura libre"
+    ON Insignias FOR SELECT TO authenticated USING (true);
+
 -- =====================================================================
 -- CONSULTAS DE EJEMPLO
 -- =====================================================================
