@@ -9,7 +9,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import MapView, { Marker } from 'react-native-maps';
+import { MapaView, Marker } from '@/components/mapa';
 
 import { obtenerDestino } from '@/services/destinos';
 
@@ -165,7 +165,7 @@ export default function DestinoDetalle() {
           <Text style={styles.sectionTitle}>Ubicación</Text>
 
           <View style={styles.mapContainer}>
-            <MapView
+            <MapaView
               style={styles.map}
               initialRegion={{
                 latitude: Number(destino.latitud),
@@ -181,7 +181,7 @@ export default function DestinoDetalle() {
                 }}
                 title={destino.nombre}
               />
-            </MapView>
+            </MapaView>
 
             <Pressable
               style={styles.mapButton}

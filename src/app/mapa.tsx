@@ -2,10 +2,7 @@ import * as Location from 'expo-location';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import MapView, {
-    Marker,
-    PROVIDER_GOOGLE,
-} from 'react-native-maps';
+import { MapaView, Marker, PROVIDER_GOOGLE } from '@/components/mapa';
 
 import { obtenerDestinos } from '@/services/destinos';
 import { registrarVisita } from '@/services/visitas';
@@ -253,7 +250,7 @@ export default function MapaScreen() {
       </View>
 
       {/* MAPA */}
-      <MapView
+      <MapaView
         provider={PROVIDER_GOOGLE}
         style={styles.map}
 
@@ -302,7 +299,7 @@ export default function MapaScreen() {
           </Marker>
         ))}
 
-      </MapView>
+      </MapaView>
 
       {/* TARJETA DEL DESTINO */}
       {destinoSeleccionado && (
